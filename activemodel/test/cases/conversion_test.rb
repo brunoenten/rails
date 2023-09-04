@@ -34,6 +34,10 @@ class ConversionTest < ActiveModel::TestCase
     assert_equal "abc-xyz", Contact.new(id: ["abc", "xyz"]).to_param
   end
 
+  test "to_param returns nil if composite id is incomplete" do
+    assert_nil Contact.new(id: [1, nil]).to_param
+  end
+
   test "to_param returns nil if to_key is nil" do
     klass = Class.new(Contact) do
       def persisted?
@@ -52,6 +56,10 @@ class ConversionTest < ActiveModel::TestCase
 
   test "to_partial_path handles namespaced models" do
     assert_equal "helicopter/comanches/comanche", Helicopter::Comanche.new.to_partial_path
+  end
+
+  test "to_partial_path handles non-standard model_name" do
+    assert_equal "attack_helicopters/ah-64", Helicopter::Apache.new.to_partial_path
   end
 
   test "#to_param_delimiter allows redefining the delimiter used in #to_param" do

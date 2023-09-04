@@ -45,6 +45,9 @@ gem "json", ">= 2.0.0"
 # Workaround until Ruby ships with cgi version 0.3.6 or higher.
 gem "cgi", ">= 0.3.6", require: false
 
+# Workaround until globalid gem is fixed
+gem "globalid", "< 1.2.0", require: false
+
 group :rubocop do
   gem "rubocop", ">= 1.25.1", require: false
   gem "rubocop-minitest", require: false
@@ -155,7 +158,7 @@ platforms :ruby, :windows do
   group :db do
     gem "pg", "~> 1.3"
     gem "mysql2", "~> 0.5"
-    gem "trilogy", github: "github/trilogy", branch: "main", glob: "contrib/ruby/*.gemspec"
+    gem "trilogy", ">= 2.5.0"
   end
 end
 

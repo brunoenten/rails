@@ -58,7 +58,33 @@ getting your Rails application up and running in a production environment.
 
 ### Add `ActiveRecord::Base.normalizes`
 
-TODO: Add description https://github.com/rails/rails/pull/43945
+Normalizations can be declared for attribute values. The normalization
+takes place when the attribute is assigned or updated, and will be persisted to the database.
+Normalization is also applied to corresponding keyword arguments in finder methods,
+allowing records to be queried using unnormalized values.
+
+For example:
+
+```ruby
+class User < ActiveRecord::Base
+  normalizes :email, with: -> email { email.strip.downcase }
+  normalizes :phone, with: -> phone { phone.delete("^0-9").delete_prefix("1") }
+end
+
+user = User.create(email: " CRUISE-CONTROL@EXAMPLE.COM\n")
+user.email                  # => "cruise-control@example.com"
+
+user = User.find_by(email: "\tCRUISE-CONTROL@EXAMPLE.COM ")
+user.email                  # => "cruise-control@example.com"
+user.email_before_type_cast # => "cruise-control@example.com"
+
+User.where(email: "\tCRUISE-CONTROL@EXAMPLE.COM ").count # => 1
+
+User.exists?(email: "\tCRUISE-CONTROL@EXAMPLE.COM ")         # => true
+User.exists?(["email = ?", "\tCRUISE-CONTROL@EXAMPLE.COM "]) # => false
+
+User.normalize_value_for(:phone, "+1 (555) 867-5309") # => "5558675309"
+```
 
 ### Add `ActiveRecord::Base.generates_token_for`
 
@@ -96,9 +122,25 @@ and reporting of the bulk enqueuing process.
 
 TODO: Add description
 
-### Introduce adapter for Trilogy
+### Introduce adapter for `Trilogy`
 
-TODO: Add description https://github.com/rails/rails/pull/47880
+A [new adapter has been introduced](https://github.com/rails/rails/pull/47880) to facilitate the
+seamless integration of `Trilogy`, a MySQL-compatible database client, with Rails applications.
+Now, Rails applications have the option to incorporate `Trilogy` functionality by configuring their
+`config/database.yml` file. For instance:
+
+```yaml
+development:
+  adapter: trilogy
+  database: blog_development
+  pool: 5
+```
+
+Alternatively, integration can be achieved using the `DATABASE_URL` environment variable:
+
+```ruby
+ENV['DATABASE_URL'] # => "trilogy://localhost/blog_development?pool=5"
+```
 
 ### Add `ActiveSupport::MessagePack`
 
@@ -130,15 +172,99 @@ Please, see more details in the [autoloading guide](autoloading_and_reloading_co
 
 ### Active Record API for general async queries
 
-TODO: Add description https://github.com/rails/rails/pull/44446
+A significant enhancement has been introduced to the Active Record API, expanding its
+[support for asynchronous queries](https://github.com/rails/rails/pull/44446). This enhancement
+addresses the need for more efficient handling of not-so-fast queries, particularly focusing on
+aggregates (such as `count`, `sum`, etc.) and all methods returning a single record or anything
+other than a `Relation`.
+
+The new API includes the following asynchronous methods:
+
+- `async_count`
+- `async_sum`
+- `async_minimum`
+- `async_maximum`
+- `async_average`
+- `async_pluck`
+- `async_pick`
+- `async_find_by_sql`
+- `async_count_by_sql`
+
+Here's a brief example of how to use one of these methods, `async_count`, to count the number of published
+posts in an asynchronous manner:
+
+```ruby
+# Synchronous count
+published_count = Post.where(published: true).count # => 10
+
+# Asynchronous count
+promise = Post.where(published: true).async_count # => #<ActiveRecord::Promise status=pending>
+promise.value # => 10
+```
+
+These methods allow for the execution of these operations in an asynchronous manner, which can significantly
+improve performance for certain types of database queries.
 
 ### Allow templates to set strict `locals`.
 
-TODO: https://github.com/rails/rails/pull/45602
+Introduce a new feature that [allows templates to set explicit `locals`](https://github.com/rails/rails/pull/45602).
+This enhancement provides greater control and clarity when passing variables to your templates.
 
-### Add Rails.application.deprecators
+By default, templates will accept any `locals` as keyword arguments. However, now you can define what `locals` a
+template should accept by adding a `locals` magic comment at the beginning of your template file.
 
-TODO: https://github.com/rails/rails/pull/46049
+Here's how it works:
+
+```erb
+<%# locals: (message:) -%>
+<%= message %>
+```
+
+You can also set default values for these locals:
+
+```erb
+<%# locals: (message: "Hello, world!") -%>
+<%= message %>
+```
+
+If you want to disable the use of locals entirely, you can do so like this:
+
+```erb
+<%# locals: () %>
+```
+
+### Add `Rails.application.deprecators`
+
+The new [`Rails.application.deprecators` method](https://github.com/rails/rails/pull/46049) returns a
+collection of managed deprecators within your application, and allows you to add and retrieve individual
+deprecators with ease:
+
+```ruby
+Rails.application.deprecators[:my_gem] = ActiveSupport::Deprecation.new("2.0", "MyGem")
+Rails.application.deprecators[:other_gem] = ActiveSupport::Deprecation.new("3.0", "OtherGem")
+```
+
+The collection's configuration settings affect all deprecators in the collection.
+
+```ruby
+Rails.application.deprecators.debug = true
+
+puts Rails.application.deprecators[:my_gem].debug
+# true
+
+puts Rails.application.deprecators[:other_gem].debug
+# true
+```
+
+There are scenarios where you might want to mute all deprecator warnings for a specific block of code.
+With the deprecators collection, you can easily silence all deprecator warnings within a block:
+
+```ruby
+Rails.application.deprecators.silence do
+  Rails.application.deprecators[:my_gem].warn    # No warning (silenced)
+  Rails.application.deprecators[:other_gem].warn # No warning (silenced)
+end
+```
 
 ### Support pattern matching for JSON `response.parsed_body`
 
@@ -215,11 +341,15 @@ Please refer to the [Changelog][railties] for detailed changes.
 
 *   Remove deprecated `bin/rails secrets:setup` command.
 
+*   Remove default `X-Download-Options` header since it is used only by Internet Explorer.
+
 ### Deprecations
 
 *   Deprecated usage of `Rails.application.secrets`.
 
 *   Deprecated `secrets:show` and `secrets:edit` commands in favor of `credentials`.
+
+*   Deprecated `Rails::Generators::Testing::Behaviour` in favor of `Rails::Generators::Testing::Behavior`.
 
 ### Notable changes
 
@@ -268,7 +398,17 @@ Please refer to the [Changelog][action-pack] for detailed changes.
 
 *   Deprecate `ActionDispatch::IllegalStateError`.
 
+*   Deprecate `speaker`, `vibrate`, and `vr` permissions policy directives.
+
 ### Notable changes
+
+*   Add `exclude?` method to `ActionController::Parameters`. It is the inverse of `include?` method.
+
+*   Add `ActionController::Parameters#extract_value` method to allow extracting serialized values from params.
+
+*   Add the ability to use custom logic for storing and retrieving CSRF tokens.
+
+*   Add `html` and `screenshot` kwargs for system test screenshot helper.
 
 Action View
 -----------
@@ -284,6 +424,18 @@ Please refer to the [Changelog][action-view] for detailed changes.
 ### Deprecations
 
 ### Notable changes
+
+*   `check_box_tag` and `radio_button_tag` now accept `checked` as a keyword argument.
+
+*   Add `picture_tag` helper to generate HTML `<picture>` tags.
+
+*   The `simple_format` helper now handles a `:sanitize_options` feature, allowing the addition of extra
+    options for the sanitize process.
+
+    ```ruby
+      simple_format("<a target=\"_blank\" href=\"http://example.com\">Continue</a>", {}, { sanitize_options: { attributes: %w[target href] } })
+      # => "<p><a target=\"_blank\" href=\"http://example.com\">Continue</a></p>"
+    ```
 
 Action Mailer
 -------------
@@ -325,9 +477,32 @@ Please refer to the [Changelog][active-record] for detailed changes.
 
 *   Remove deprecated `Tasks::DatabaseTasks.schema_file_type`.
 
+*   Remove `--no-comments` flag in structure dumps for PostgreSQL.
+
 ### Deprecations
 
+*   Deprecate `name` argument on `#remove_connection`.
+
+*   Deprecate `check_pending!` in favor of `check_all_pending!`.
+
+*   Deprecate `deferrable: true` option of `add_foreign_key` in favor of `deferrable: :immediate`.
+
+*   Deprecate `TestFixtures#fixture_path` in favor of `TestFixtures#fixture_paths`.
+
+*   Deprecate delegation from `Base` to `connection_handler`.
+
+*   Deprecate `config.active_record.suppress_multiple_database_warning`.
+
+*   Deprecate using `ActiveSupport::Duration` as an interpolated bind parameter in a SQL
+    string template.
+
+*   Deprecate `all_connection_pools` and make `connection_pool_list` more explicit.
+
+*   Deprecate `read_attribute(:id)` returning the primary key if the primary key is not `:id`.
+
 ### Notable changes
+
+*   Add `TestFixtures#fixture_paths` to support multiple fixture paths.
 
 Active Storage
 --------------
@@ -349,6 +524,19 @@ Please refer to the [Changelog][active-storage] for detailed changes.
 
 ### Notable changes
 
+*   `ActiveStorage::Analyzer::AudioAnalyzer` now outputs `sample_rate` and `tags` in the output `metadata` hash.
+
+*   Add the option to utilize predefined variants when invoking the `preview` or `representation` methods on an
+    attachment.
+
+*   `preprocessed` option is added when declaring variants to preprocess variants.
+
+*   Add the ability to destroy active storage variants.
+
+    ```ruby
+    User.first.avatar.variant(resize_to_limit: [100, 100]).destroy
+    ```
+
 Active Model
 ------------
 
@@ -359,6 +547,31 @@ Please refer to the [Changelog][active-model] for detailed changes.
 ### Deprecations
 
 ### Notable changes
+
+*   Add support for infinite ranges to `LengthValidator`s `:in`/`:within` options.
+
+    ```ruby
+    validates_length_of :first_name, in: ..30
+    ```
+
+*   Add support for beginless ranges to `inclusivity/exclusivity` validators.
+
+     ```ruby
+    validates_inclusion_of :birth_date, in: -> { (..Date.today) }
+    ```
+
+*   Add support for password challenges to `has_secure_password`. When set, validate that the password
+    challenge matches the persisted `password_digest`.
+
+*   Allow validators to accept lambdas without record argument.
+
+    ```ruby
+    # Before
+    validates_comparison_of :birth_date, less_than_or_equal_to: ->(_record) { Date.today }
+
+    # After
+    validates_comparison_of :birth_date, less_than_or_equal_to: -> { Date.today }
+    ```
 
 Active Support
 --------------
@@ -402,9 +615,19 @@ Please refer to the [Changelog][active-job] for detailed changes.
 
 ### Removals
 
+*   Remove `QueAdapter`.
+
 ### Deprecations
 
 ### Notable changes
+
+*   Add `perform_all_later` to enqueue multiple jobs at once.
+
+*   Add `--parent` option to job generator to specify parent class of job.
+
+*   Add `after_discard` method to `ActiveJob::Base` to run a callback when a job is about to be discarded.
+
+*   Add support for logging background job enqueue callers.
 
 Action Text
 ----------
@@ -427,6 +650,11 @@ Please refer to the [Changelog][action-mailbox] for detailed changes.
 ### Deprecations
 
 ### Notable changes
+
+*   Add `X-Forwarded-To` addresses to recipients.
+
+*   Add `bounce_now_with` method to `ActionMailbox::Base` to send the bounce email without going through a
+    mailer queue.
 
 Ruby on Rails Guides
 --------------------
