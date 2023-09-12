@@ -501,11 +501,9 @@ module ActiveRecord
       def foreign_key(infer_from_inverse_of: true)
         @foreign_key ||= if options[:query_constraints]
           options[:query_constraints].map { |fk| fk.to_s.freeze }.freeze
-        elsif options[:foreign_key].is_a?(Array)
-          # composite foreign keys support
-          options[:foreign_key].map { |fk| fk.to_s.freeze }.freeze
         elsif options[:foreign_key]
-          options[:foreign_key].to_s
+          fk_array = Array(options[:foreign_key]).map { |fk| fk.to_s.freeze }.freeze
+          fk_array.size > 1 ? fk_array : fk_array.first
         else
           derived_fk = derive_foreign_key(infer_from_inverse_of: infer_from_inverse_of)
 
